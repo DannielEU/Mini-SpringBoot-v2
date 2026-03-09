@@ -2,69 +2,140 @@
 <html lang="es">
 <head>
     <meta charset="UTF-8">
-    <title>Servidor HTTP - Prueba</title>
+    <title>Mini-Spring Framework</title>
     <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            margin: 0;
-            padding: 0;
             font-family: Arial, Helvetica, sans-serif;
             background: linear-gradient(135deg, #1e3c72, #2a5298);
+            min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
-            height: 100vh;
             color: white;
         }
-
         .card {
-            background: rgba(255, 255, 255, 0.1);
-            padding: 40px;
-            border-radius: 15px;
+            background: rgba(255,255,255,0.12);
+            padding: 40px 50px;
+            border-radius: 16px;
             text-align: center;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4);
             backdrop-filter: blur(10px);
+            max-width: 600px;
+            width: 90%;
         }
-
-        h1 {
-            margin: 0;
-            font-size: 2.5em;
-        }
-
-        p {
-            font-size: 1.2em;
-            margin-top: 10px;
-        }
-
-        button {
-            margin-top: 20px;
-            padding: 10px 20px;
-            border: none;
+        h1 { font-size: 2em; margin-bottom: 6px; }
+        .subtitle { font-size: 1em; opacity: 0.8; margin-bottom: 30px; }
+        h2 { font-size: 1.1em; margin-bottom: 14px; opacity: 0.9; }
+        .endpoints { list-style: none; text-align: left; }
+        .endpoints li {
+            background: rgba(255,255,255,0.1);
             border-radius: 8px;
-            background-color: #ffffff;
+            padding: 12px 16px;
+            margin-bottom: 10px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .method {
+            background: #4caf50;
+            color: white;
+            font-weight: bold;
+            font-size: 0.75em;
+            padding: 3px 8px;
+            border-radius: 4px;
+            flex-shrink: 0;
+        }
+        .endpoints a { color: #a8d8ff; text-decoration: none; }
+        .endpoints a:hover { text-decoration: underline; }
+        .desc { font-size: 0.85em; opacity: 0.7; margin-top: 2px; }
+        .result-box {
+            margin-top: 20px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            padding: 14px;
+            font-family: monospace;
+            font-size: 0.95em;
+            min-height: 40px;
+            text-align: left;
+            word-break: break-all;
+        }
+        .input-row {
+            display: flex;
+            gap: 8px;
+            margin-top: 16px;
+            justify-content: center;
+        }
+        input[type=text] {
+            padding: 8px 12px;
+            border-radius: 6px;
+            border: none;
+            font-size: 0.95em;
+            flex: 1;
+            max-width: 200px;
+        }
+        button {
+            padding: 8px 18px;
+            border: none;
+            border-radius: 6px;
+            background: #ffffff;
             color: #2a5298;
             font-weight: bold;
             cursor: pointer;
-            transition: 0.3s;
+            transition: 0.2s;
         }
-
-        button:hover {
-            background-color: #ddd;
-        }
+        button:hover { background: #dde8ff; }
     </style>
 </head>
 <body>
-
 <div class="card">
-    <h1>Daniel Eduardo Useche</h1>
-    <p>Estudiante de TDSE</p>
-    <button onclick="mostrarMensaje()">Haz clic aquí</button>
+    <h1>Mini-Spring Framework</h1>
+    <p class="subtitle">Servidor HTTP con IoC &mdash; Daniel Eduardo Useche</p>
+
+    <h2>Endpoints disponibles</h2>
+    <ul class="endpoints">
+        <li>
+            <span class="method">GET</span>
+            <div>
+                <a href="/hello" target="_blank">/hello</a>
+                <div class="desc">Saludo gen&eacute;rico del servidor</div>
+            </div>
+        </li>
+        <li>
+            <span class="method">GET</span>
+            <div>
+                <a href="/pi" target="_blank">/pi</a>
+                <div class="desc">Retorna el valor de &pi;</div>
+            </div>
+        </li>
+        <li>
+            <span class="method">GET</span>
+            <div>
+                <a href="/greeting?name=Mundo" target="_blank">/greeting?name=Mundo</a>
+                <div class="desc">Saludo personalizado con @RequestParam</div>
+            </div>
+        </li>
+    </ul>
+
+    <div class="input-row">
+        <input type="text" id="nameInput" placeholder="Tu nombre" value="Mundo" />
+        <button onclick="saludar()">Saludar</button>
+    </div>
+    <div class="result-box" id="result">La respuesta aparecera aqui...</div>
 </div>
 
 <script>
-    function mostrarMensaje() {
-        alert("Servidor funcionando correctamente, por Daniel Useche");
+    async function saludar() {
+        const name = document.getElementById('nameInput').value || 'Mundo';
+        const box = document.getElementById('result');
+        box.textContent = 'Cargando...';
+        try {
+            const res = await fetch('/greeting?name=' + encodeURIComponent(name));
+            box.textContent = await res.text();
+        } catch (e) {
+            box.textContent = 'Error: ' + e.message;
+        }
     }
 </script>
-
 </body>
 </html>

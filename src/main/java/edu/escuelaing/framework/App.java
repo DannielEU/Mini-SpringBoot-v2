@@ -1,17 +1,22 @@
 package edu.escuelaing.framework;
 
+/**
+ * Entry point. Starts the IoC scanner and the HTTP server.
+ *
+ * Run with:
+ *   java -cp target/classes edu.escuelaing.framework.App
+ */
 public class App {
 
     public static void main(String[] args) throws Exception {
 
-        WebFramework.staticfiles("/webroot");
+        // Serve static files from the "webroot" folder in the classpath
+        WebFramework.staticfiles("webroot");
 
-        WebFramework.get("/App/hello", (req, resp) ->
-                "Hello " + req.getValues("name"));
+        // Scan classpath for @RestController classes and register their routes
+        MicroSpringBoot.run();
 
-        WebFramework.get("/App/pi", (req, resp) ->
-                String.valueOf(Math.PI));
-
+        // Start listening
         HttpServer.main(args);
     }
 }

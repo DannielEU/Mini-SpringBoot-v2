@@ -1,425 +1,298 @@
-# MiniSpringBoot - Custom Java Web Framework
+# Mini-Spring Framework
 
-<div align="center">
-
-**Un framework web ligero y educativo construido desde cero en Java**
-
-![Java](https://img.shields.io/badge/Java-ED8B00?style=flat-square&logo=java&logoColor=white)
-![Version](https://img.shields.io/badge/version-1.0-blue?style=flat-square)
-![License](https://img.shields.io/badge/license-MIT-green?style=flat-square)
-
-</div>
+**Autor:** Daniel Eduardo Useche
+**Asignatura:** Taller de Desarrollo de Software Empresarial (TDSE)
+**Version:** 2.0-SNAPSHOT
 
 ---
 
-## 📋 Tabla de Contenidos
+## Tabla de Contenidos
 
-- [Descripción General](#descripción-general)
-- [Características](#características)
-- [Requisitos Previos](#requisitos-previos)
-- [Instalación y Configuración](#instalación-y-configuración)
-- [Estructura del Proyecto](#estructura-del-proyecto)
-- [Guía de Uso](#guía-de-uso)
-- [Componentes del Framework](#componentes-del-framework)
-- [Arquitectura](#arquitectura)
-- [Ejemplos de Uso](#ejemplos-de-uso)
-- [Limitaciones y Mejoras](#limitaciones-y-mejoras)
-- [Objetivo Educativo](#objetivo-educativo)
-
----
-
-## Descripción General
-
-**MiniSpringBoot** es un framework web minimalista escrito en Java desde cero, diseñado para comprender cómo funcionan los servidores web y frameworks modernos como Spring Boot por debajo.
-
-El proyecto implementa un **servidor HTTP personalizado** que permite:
-- Definir servicios REST usando expresiones lambda
-- Manejo automático de parámetros de consulta (query parameters)
-- Servir archivos estáticos (HTML, CSS, JavaScript, imágenes)
-- Manejo básico de respuestas HTTP (200 OK, 404 Not Found)
-- Routing dinámico de requests
-
-### ¿Por qué este proyecto?
-
-Entender cómo funcionan frameworks como Spring Boot es crucial para cualquier desarrollador Java. Este proyecto desglosa los conceptos fundamentales de manera simple y educativa.
+1. [Descripcion General](#descripcion-general)
+2. [Estado Inicial del Proyecto](#estado-inicial-del-proyecto)
+3. [Cambios Implementados](#cambios-implementados)
+4. [Arquitectura del Framework IoC](#arquitectura-del-framework-ioc)
+5. [Estructura del Proyecto](#estructura-del-proyecto)
+6. [Componentes del Framework](#componentes-del-framework)
+7. [Aplicacion de Ejemplo](#aplicacion-de-ejemplo)
+8. [Instrucciones de Ejecucion](#instrucciones-de-ejecucion)
+9. [Endpoints Disponibles](#endpoints-disponibles)
+10. [Conceptos Aplicados](#conceptos-aplicados)
 
 ---
 
-## Características
+## Descripcion General
 
-### ✅ Principales
+Mini-Spring es un servidor HTTP educativo escrito en Java puro, sin dependencias externas en tiempo de ejecucion. El proyecto demuestra como funcionan internamente los frameworks web modernos como Spring Boot, implementando desde cero un servidor TCP, un sistema de enrutamiento y un contenedor IoC (Inversion of Control) basado en anotaciones y reflexion de Java.
 
-| Característica | Descripción |
+El objetivo principal es construir un prototipo minimo que:
+
+- Atienda solicitudes HTTP (paginas HTML e imagenes PNG).
+- Provea un framework IoC para la construccion de aplicaciones web a partir de POJOs anotados.
+- Descubra automaticamente los componentes web usando reflexion de Java sobre el classpath.
+- Soporte las anotaciones `@RestController`, `@GetMapping` y `@RequestParam`.
+
+---
+
+## Estado Inicial del Proyecto
+
+Antes de las modificaciones documentadas en este informe, el proyecto contaba con:
+
+### Clases existentes
+
+| Clase | Rol |
 |---|---|
-| **Servidor HTTP** | Servidor TCP personalizado en el puerto 8080 |
-| **Routing** | Sistema de rutas basado en HashMap para mapear URLs a funciones |
-| **Lambda Expressions** | Uso de expresiones lambda para definir manejadores de rutas |
-| **Query Parameters** | Parseo automático de parámetros GET desde la URL |
-| **Static Files** | Servicio de archivos estáticos con detección automática de MIME types |
-| **HTTP Responses** | Respuestas HTTP correctamente formateadas con headers |
-| **Content-Type Detection** | Detección automática de tipos de contenido (HTML, CSS, JS, imágenes, etc.) |
+| `App.java` | Punto de entrada; registraba rutas manualmente usando lambdas |
+| `HttpServer.java` | Servidor TCP en el puerto 8080 |
+| `WebFramework.java` | Registro de rutas en un `Map<String, Route>` |
+| `Request.java` | Parseo de query parameters |
+| `Response.java` | Clase vacia, reservada para uso futuro |
+| `Route.java` | Interfaz funcional `handle(Request, Response): String` |
 
-### 🎯 Funcionalidades Específicas
+### Limitaciones identificadas
 
-#### 1. Servicios REST con Expresiones Lambda
+1. Las rutas se registraban programaticamente en `App.java` mediante lambdas, lo que rompe el principio de separacion de responsabilidades.
+2. El servidor no utilizaba anotaciones ni reflexion; el framework no tenia capacidad IoC.
+3. La carga de archivos estaticos usaba una ruta relativa al sistema de archivos (`"../main/resources/..."`) que no funcionaba correctamente al ejecutar desde el directorio `target/classes` de Maven.
+4. No existia mecanismo para que el framework descubriera componentes automaticamente.
 
-Define rutas dinámicamente usando lambdas:
+---
+
+## Cambios Implementados
+
+### 1. Paquete de Anotaciones (`edu.escuelaing.framework.annotations`)
+
+Se crearon tres anotaciones Java con retencion en tiempo de ejecucion (`RUNTIME`), que permiten al framework identificar componentes y metadatos mediante reflexion:
+
+**`@RestController`**
+Anotacion de tipo (`ElementType.TYPE`). Marca una clase POJO como controlador web. El scanner de IoC busca esta anotacion en todas las clases del classpath para registrarlas automaticamente.
+
+**`@GetMapping`**
+Anotacion de metodo (`ElementType.METHOD`). Recibe como parametro el valor de la ruta URI a la que responde el metodo. Solo se procesan metodos con tipo de retorno `String`.
+
+**`@RequestParam`**
+Anotacion de parametro (`ElementType.PARAMETER`). Especifica el nombre del query parameter HTTP que se debe inyectar como argumento del metodo, e incluye un atributo `defaultValue` para cuando el parametro no es enviado por el cliente.
+
+---
+
+### 2. Clase `MicroSpringBoot` (Scanner IoC)
+
+Se creo la clase `MicroSpringBoot` con un metodo estatico `run()` que implementa el descubrimiento automatico de componentes mediante la API de reflexion de Java (`java.lang.reflect`).
+
+**Proceso de escaneo:**
+
+1. Se lee la propiedad del sistema `java.class.path` para obtener todas las entradas del classpath.
+2. Por cada entrada que sea un directorio, se recorre recursivamente el sistema de archivos buscando archivos `.class`.
+3. Cada archivo `.class` se convierte en nombre de clase calificado y se carga con `Class.forName(className)`.
+4. Si la clase tiene la anotacion `@RestController`, se instancia con `getDeclaredConstructor().newInstance()`.
+5. Se iteran los metodos de la clase buscando `@GetMapping`. Por cada metodo encontrado:
+   - Se extrae la ruta del atributo `value()` de la anotacion.
+   - Se registra una `Route` (lambda) en `WebFramework` que, al ser invocada, usa reflexion para construir los argumentos del metodo inspeccionando las anotaciones `@RequestParam` de cada parametro.
+   - Si el query parameter esta presente en la solicitud, se usa su valor; en caso contrario se usa el `defaultValue`.
+   - El metodo se invoca con `Method.invoke(instance, args)` y el resultado (`String`) se retorna como cuerpo de la respuesta HTTP.
+
+Este mecanismo es funcionalmente equivalente al que usa Spring Framework internamente, aunque considerablemente mas simple.
+
+---
+
+### 3. Controladores de Ejemplo (`edu.escuelaing.app`)
+
+Se creo el paquete `edu.escuelaing.app` para albergar los componentes web de la aplicacion de ejemplo, separandolos del nucleo del framework.
+
+**`HelloController`**
+Controlador con dos endpoints que retornan cadenas de texto simples. Demuestra el uso basico de `@RestController` y `@GetMapping` sin parametros.
+
+**`GreetingController`**
+Controlador que demuestra el uso de `@RequestParam`. El metodo `greeting` recibe el parametro `name` del query string con valor por defecto `"World"` y retorna un saludo personalizado junto con un contador atomico de visitas (`AtomicLong`), demostrando que la instancia del controlador persiste entre solicitudes (comportamiento singleton).
+
+Con la implementacion IoC, estos controladores son descubiertos y registrados automaticamente al iniciar el servidor, sin necesidad de modificar `App.java`.
+
+---
+
+### 4. Actualizacion de `HttpServer.java`
+
+**Problema resuelto:** La version anterior usaba una ruta relativa al sistema de archivos para localizar archivos estaticos:
 
 ```java
-WebFramework.get("/App/hello", (req, res) -> "Hello World");
-WebFramework.get("/App/pi", (req, res) -> String.valueOf(Math.PI));
+String fullPath = "../main/resources" + WebFramework.getStaticFolder() + path;
+File file = new File(fullPath);
 ```
 
-Las rutas se registran internamente en un `Map<String, Route>`.
+Este enfoque depende del directorio de trabajo actual al momento de lanzar el proceso y falla cuando se ejecuta desde `target/classes` o desde un JAR.
 
-#### 2. Extracción de Parámetros de Consulta
-
-Los parámetros GET se parsean automáticamente y son accesibles:
+**Solucion implementada:** Se reemplazo la carga por sistema de archivos con la API de `ClassLoader`:
 
 ```java
-req.getValues("name");  // Obtiene el valor del parámetro "name"
+InputStream fileStream = HttpServer.class.getClassLoader()
+    .getResourceAsStream(classpathResource);
 ```
 
-**Ejemplo de solicitud:**
-```
-http://localhost:8080/App/hello?name=Pedro
-```
+Esto garantiza que los recursos estaticos se buscan dentro del classpath (incluyendo el interior de un JAR ejecutable), haciendolo robusto independientemente del directorio de trabajo.
 
-**Respuesta esperada:**
-```
-Hello Pedro
-```
+Adicionalmente se corrigio el manejo de conexiones: se eliminaba el `PrintWriter` antes de que las demas operaciones pudieran completarse, causando cierres prematuros del socket; el flujo de cierre se reordeno correctamente.
 
-#### 3. Gestión de Archivos Estáticos
+---
 
-Sirve archivos desde un directorio configurado:
+### 5. Actualizacion de `App.java`
 
+El punto de entrada se simplifica radicalmente. Ya no registra rutas manualmente; su unica responsabilidad es:
+
+1. Configurar la carpeta de archivos estaticos.
+2. Invocar `MicroSpringBoot.run()` para que el framework descubra y registre todos los controladores.
+3. Iniciar el servidor HTTP.
+
+Antes:
 ```java
 WebFramework.staticfiles("/webroot");
+WebFramework.get("/App/hello", (req, resp) -> "Hello " + req.getValues("name"));
+WebFramework.get("/App/pi",    (req, resp) -> String.valueOf(Math.PI));
+HttpServer.main(args);
 ```
 
-El servidor automáticamente:
-- Serve `index.html` cuando se accede a `/`
-- Detecta el tipo de contenido correcto
-- Devuelve errores 404 para archivos no encontrados
-- Soporta múltiples tipos MIME
+Despues:
+```java
+WebFramework.staticfiles("webroot");
+MicroSpringBoot.run();
+HttpServer.main(args);
+```
 
 ---
 
-## Requisitos Previos
+### 6. Actualizacion de `index.html`
 
-### Software Requerido
+Se rediseno la pagina principal para reflejar la nueva funcionalidad del framework:
 
-- **Java Development Kit (JDK)**: Versión 8 o superior
-  - Verificar instalación: `java -version`
-- **Apache Maven**: Para compilación y gestión de dependencias
-  - Verificar instalación: `mvn -version`
-- **IDE** (recomendado):
-  - IntelliJ IDEA
-  - Eclipse
-  - Visual Studio Code con extensiones Java
-- **Terminal/Consola** para ejecución
-
-### Dependencias
-
-Este proyecto es minimalista y no requiere dependencias externas en tiempo de ejecución. Utiliza solo la librería estándar de Java:
-- `java.io.*` - Manejo de streams
-- `java.net.*` - Operaciones de red (ServerSocket, Socket)
-- `java.nio.file.*` - Lectura de archivos
-- `java.util.*` - Colecciones (HashMap, Map)
+- Se agregaron enlaces a los tres endpoints registrados automaticamente por el IoC.
+- Se implemento un formulario interactivo con JavaScript que llama al endpoint `/greeting` usando `fetch()` y muestra la respuesta sin recargar la pagina.
+- Se elimino el contenido de prueba anterior.
 
 ---
 
-## Instalación y Configuración
+### 7. Actualizacion de `pom.xml`
 
-### Paso 1: Clonar o Descargar el Proyecto
+Se realizaron tres cambios en el archivo de construccion de Maven:
 
-```bash
-# Si está en un repositorio Git
-git clone <repository-url>
-cd Mini-Spring/v1
+**Flag `-parameters` en el compilador:**
+Permite que los nombres de los parametros de los metodos sean accesibles en tiempo de ejecucion mediante la API de reflexion. Aunque en esta implementacion los nombres se obtienen de la anotacion `@RequestParam(value="...")`, el flag es necesario para una futura resolucion de parametros por nombre.
 
-# O descargar el archivo ZIP y extraer
+**Plugin `exec-maven-plugin`:**
+Permite ejecutar la aplicacion directamente con `mvn exec:java` sin necesidad de construir el JAR.
+
+**Plugin `maven-shade-plugin`:**
+Genera un JAR ejecutable (fat jar) que incluye todas las dependencias y define la clase principal en el Manifest. Permite ejecutar la aplicacion con `java -jar target/mini-spring-1.0-SNAPSHOT.jar`.
+
+---
+
+## Arquitectura del Framework IoC
+
+### Flujo de Arranque
+
+```
+App.main()
+    |
+    +-- WebFramework.staticfiles("webroot")
+    |       Configura la carpeta de recursos estaticos
+    |
+    +-- MicroSpringBoot.run()
+    |       Lee java.class.path
+    |       Recorre directorios buscando archivos .class
+    |       Para cada clase con @RestController:
+    |           Instancia el POJO (new instance via reflection)
+    |           Para cada metodo con @GetMapping:
+    |               Lee la ruta del atributo value()
+    |               Crea una Route (lambda) que usa reflection
+    |               para construir args desde @RequestParam
+    |               Registra la Route en WebFramework
+    |
+    +-- HttpServer.main()
+            ServerSocket en puerto 8080
+            Loop: acepta Socket -> parsea HTTP -> enruta -> responde
 ```
 
-### Paso 2: Verificar la Estructura
+### Flujo de una Solicitud HTTP
 
 ```
-c:\Users\Danie\Documents\TDSE\Mini-Spring\v1/
-├── MiniSpringBoot.iml
-├── README.md
-├── pom.xml
-└── src/
-    └── main/
-        ├── java/
-        │   └── edu/escuelaing/framework/
-        │       ├── App.java
-        │       ├── HttpServer.java
-        │       ├── WebFramework.java
-        │       ├── Request.java
-        │       ├── Response.java
-        │       └── Route.java
-        └── resources/
-            └── webroot/
-                ├── index.html
-                └── public/
+Cliente envia: GET /greeting?name=Ana HTTP/1.1
+
+HttpServer
+    Lee la linea de solicitud
+    Separa path (/greeting) y query string (name=Ana)
+    Consulta WebFramework.getRoute("/greeting")
+        -> Encuentra la Route registrada por MicroSpringBoot
+    Crea Request("name=Ana") y Response()
+    Invoca route.handle(req, res)
+        -> La lambda llama GreetingController.greeting("Ana") via reflection
+        -> Retorna "Hello, Ana! (visita #1)"
+    Envia HTTP/1.1 200 OK con el cuerpo de texto
+    Cierra el socket
+
+Cliente recibe: Hello, Ana! (visita #1)
 ```
 
-### Paso 3: Compilar el Proyecto
+### Flujo de un Archivo Estatico
 
-```bash
-# Usando Maven
-mvn clean compile
-
-# O compilar manualmente desde el IDE
 ```
+Cliente envia: GET / HTTP/1.1
 
-### Paso 4: Ejecutar la Aplicación
-
-```bash
-# Opción 1: Ejecutar desde Maven
-mvn exec:java -Dexec.mainClass="main.java.edu.escuelaing.framework.App"
-
-# Opción 2: Compilar y ejecutar manualmente
-mvn package
-java -cp target/classes main.java.edu.escuelaing.framework.App
-
-# Opción 3: Desde el IDE
-# Click derecho en App.java → Run
+HttpServer
+    Path "/" se normaliza a "/index.html"
+    No hay Route registrada para "/"
+    Construye ruta de classpath: "webroot/index.html"
+    ClassLoader.getResourceAsStream("webroot/index.html")
+    Lee todos los bytes del stream
+    Detecta Content-Type: "text/html; charset=UTF-8"
+    Envia HTTP/1.1 200 OK con el contenido del archivo
 ```
-
-### Paso 5: Verificar que el Servidor Está Funcionando
-
-```bash
-# Deberías ver en la consola:
-# "Servidor iniciado en puerto 8080..."
-```
-
-Ahora accede a:
-- **Navegador**: http://localhost:8080/
-- **cURL**: `curl http://localhost:8080/App/hello?name=Diego`
 
 ---
 
 ## Estructura del Proyecto
 
-### Directorios Principales
-
 ```
-Mini-Spring/v1/
-│
-├── 📄 MiniSpringBoot.iml           # Configuración de IntelliJ IDEA
-├── 📄 README.md                     # Este archivo
-├── 📄 pom.xml                       # Configuración de Maven
-│
-└── 📁 src/
-    └── main/
-        ├── 📁 java/                 # Código fuente Java
-        │   └── edu/escuelaing/framework/
-        │       ├── 📄 App.java                # Punto de entrada de la aplicación
-        │       ├── 📄 HttpServer.java        # Servidor HTTP personalizado
-        │       ├── 📄 WebFramework.java      # API del framework
-        │       ├── 📄 Request.java           # Clase para manejo de solicitudes
-        │       ├── 📄 Response.java          # Clase para manejo de respuestas
-        │       └── 📄 Route.java             # Interfaz funcional para rutas
-        │
-        └── 📁 resources/            # Recursos estáticos
-            └── webroot/
-                ├── 📄 index.html             # Página principal
-                └── 📁 public/               # Archivos públicos adicionales
+Mini-Spring/v2/
+|
++-- pom.xml
++-- README.md
+|
++-- src/
+|   +-- main/
+|       +-- java/
+|       |   +-- edu/escuelaing/
+|       |       +-- framework/
+|       |       |   +-- annotations/
+|       |       |   |   +-- RestController.java
+|       |       |   |   +-- GetMapping.java
+|       |       |   |   +-- RequestParam.java
+|       |       |   |
+|       |       |   +-- MicroSpringBoot.java
+|       |       |   +-- HttpServer.java
+|       |       |   +-- WebFramework.java
+|       |       |   +-- Request.java
+|       |       |   +-- Response.java
+|       |       |   +-- Route.java
+|       |       |   +-- App.java
+|       |       |
+|       |       +-- app/
+|       |           +-- HelloController.java
+|       |           +-- GreetingController.java
+|       |
+|       +-- resources/
+|           +-- webroot/
+|               +-- index.html
+|
++-- target/
+    +-- classes/          (salida del compilador)
+    +-- mini-spring-1.0-SNAPSHOT.jar  (fat jar ejecutable)
 ```
-
-### Tamaño del Proyecto
-
-- **Líneas de código Java**: ~200 líneas
-- **Complejidad**: Baja (ideal para aprendizaje)
-- **Tiempo de compilación**: < 1 segundo
-- **Tiempo de inicio**: < 100ms
-
----
-
-## Guía de Uso
-
-### Uso Básico
-
-El archivo principal es [App.java](src/main/java/edu/escuelaing/framework/App.java):
-
-```java
-package main.java.edu.escuelaing.framework;
-
-public class App {
-    public static void main(String[] args) throws Exception {
-        // Configurar directorio de archivos estáticos
-        WebFramework.staticfiles("/webroot");
-
-        // Definir rutas GET
-        WebFramework.get("/App/hello", (req, resp) ->
-                "Hello " + req.getValues("name"));
-
-        WebFramework.get("/App/pi", (req, resp) ->
-                String.valueOf(Math.PI));
-
-        // Iniciar servidor HTTP
-        HttpServer.main(args);
-    }
-}
-```
-
-### Flujo de Ejecución
-
-1. **Inicio**: Se registran las rutas y se configura el directorio estático
-2. **Escucha**: El servidor se queda escuchando en el puerto 8080
-3. **Recepción**: Se acepta una conexión del cliente
-4. **Parseo**: Se analiza la solicitud HTTP (método, ruta, parámetros)
-5. **Enrutamiento**: Se busca la ruta en el registro
-6. **Procesamiento**: Se ejecuta el manejador (lambda) o se serve un archivo estático
-7. **Respuesta**: Se envía la respuesta HTTP formateada
-8. **Limpieza**: Se cierran streams y sockets
 
 ---
 
 ## Componentes del Framework
 
-### 1. **App.java** - Punto de Entrada
+### `Route.java`
 
-**Propósito**: Configurar y arrancar la aplicación.
+Interfaz funcional sin cambios. Define el contrato de un manejador de solicitud:
 
-**Responsabilidades**:
-- Registrar rutas (endpoints)
-- Configurar directorio de archivos estáticos
-- Iniciar el servidor HTTP
-
-**Métodos principales**:
-```java
-WebFramework.staticfiles(String folder)  // Configurar carpeta estática
-WebFramework.get(String path, Route route)  // Registrar ruta GET
-HttpServer.main(String[] args)  // Arrancar servidor
-```
-
----
-
-### 2. **HttpServer.java** - Servidor HTTP
-
-**Propósito**: Implementar el servidor TCP que maneja solicitudes HTTP.
-
-**Características**:
-- Escucha en el puerto 8080
-- Acepta múltiples conexiones en un loop
-- Parsea solicitudes HTTP (método, ruta, parámetros)
-- Enruta solicitudes a handlers o archivo estático
-- Construye y envía respuestas HTTP formateadas
-
-**Métodos principales**:
-```java
-public static void main(String[] args)  // Punto de entrada del servidor
-
-private static void sendResponse(Socket clientSocket, String body)
-// Envía respuesta HTTP con headers y body
-
-private static void serveStaticFile(Socket clientSocket, String path)
-// Serve archivos estáticos con tipo MIME correcto
-
-private static String getContentType(String path)
-// Detecta el MIME type según la extensión del archivo
-```
-
-**Flujo de Procesamiento**:
-1. `ServerSocket` escucha en puerto 8080
-2. Acepta conexión: `Socket clientSocket`
-3. Lee línea de solicitud: GET /path HTTP/1.1
-4. Parsea la ruta y parámetros
-5. Busca ruta en `WebFramework`
-6. Si existe → ejecuta handler
-7. Si no existe → intenta servir archivo estático
-8. Construye respuesta HTTP y envía
-
----
-
-### 3. **WebFramework.java** - API del Framework
-
-**Propósito**: Proporcionar la API para registrar rutas.
-
-**Componentes Principales**:
-```java
-private static Map<String, Route> routes        // Registro de rutas
-private static String staticFolder              // Carpeta de archivos estáticos
-```
-
-**Métodos Públicos**:
-```java
-public static void staticfiles(String folder)   // Configurar carpeta estática
-public static void get(String path, Route route)  // Registrar ruta GET
-public static Route getRoute(String path)       // Obtener handler de una ruta
-public static String getStaticFolder()          // Obtener carpeta configurada
-```
-
-**Ejemplo de Uso**:
-```java
-WebFramework.staticfiles("/webroot");
-WebFramework.get("/api/user", (req, res) -> "User: " + req.getValues("name"));
-Route handler = WebFramework.getRoute("/api/user");
-```
-
----
-
-### 4. **Request.java** - Manejo de Solicitudes
-
-**Propósito**: Encapsular los datos de la solicitud HTTP.
-
-**Características**:
-- Parsea query parameters automáticamente
-- Almacena parámetros en un HashMap
-
-**Métodos**:
-```java
-public Request(String queryString)  // Constructor que parsea parámetros
-public String getValues(String key)  // Obtener valor de un parámetro
-```
-
-**Ejemplo de Parseo**:
-```
-URL: /App/hello?name=Pedro&age=25
-Query String: name=Pedro&age=25
-
-Resultado:
-{
-  "name": "Pedro",
-  "age": "25"  // Nota: Como String
-}
-```
-
-**Uso**:
-```java
-Request req = new Request("name=Pedro&age=25");
-String name = req.getValues("name");  // "Pedro"
-String age = req.getValues("age");    // "25"
-```
-
----
-
-### 5. **Response.java** - Manejo de Respuestas
-
-**Propósito**: Encapsular datos de la respuesta HTTP (actualmente minimal).
-
-**Estado Actual**: Clase vacía (placeholder para futuras extensiones)
-
-```java
-public class Response {
-    // Próximas mejoras podrían incluir:
-    // - setStatus(int status)
-    // - setHeader(String key, String value)
-    // - setBody(String body)
-    // - getHeaders(), getStatus(), getBody()
-}
-```
-
----
-
-### 6. **Route.java** - Interfaz de Rutas
-
-**Propósito**: Definir el contrato para un manejador de ruta.
-
-**Definición**:
 ```java
 @FunctionalInterface
 public interface Route {
@@ -427,690 +300,188 @@ public interface Route {
 }
 ```
 
-**Características**:
-- Interfaz funcional (puede usarse con lambdas)
-- Recibe `Request` y `Response`
-- Retorna `String` (el cuerpo de la respuesta)
+Su naturaleza funcional permite que tanto las lambdas definidas manualmente como las rutas creadas por reflexion en `MicroSpringBoot` sean intercambiables.
 
-**Uso**:
+### `WebFramework.java`
+
+Registro central de rutas. Mantiene un `Map<String, Route>` que asocia rutas URI con sus manejadores. No sufrio cambios funcionales; se corrigio unicamente el valor pasado por `App.java` al metodo `staticfiles` (sin barra inicial) para que coincida con la convencion de `ClassLoader.getResourceAsStream`.
+
+### `Request.java`
+
+Parsea la query string de una solicitud HTTP en un `Map<String, String>`. No sufrio cambios.
+
+### `Response.java`
+
+Clase vacia reservada para extensiones futuras (control de status code, headers de respuesta personalizados, etc.). No sufrio cambios.
+
+### `HttpServer.java`
+
+Servidor TCP. Cambios:
+
+- Carga de archivos estaticos migrada de `File` a `ClassLoader.getResourceAsStream`.
+- Respuestas de texto incluyen `charset=UTF-8` en el header `Content-Type`.
+- Respuesta 404 incluye cuerpo descriptivo y headers correctos (`Content-Length`).
+- Correccion en el orden de cierre de streams y socket.
+
+### `MicroSpringBoot.java`
+
+Clase nueva. Implementa el escaneo del classpath y el registro automatico de controladores. Utiliza exclusivamente la API estandar de Java (`java.lang.reflect`, `java.io.File`).
+
+### `App.java`
+
+Punto de entrada simplificado. Delega el registro de rutas al framework IoC.
+
+---
+
+## Aplicacion de Ejemplo
+
+### `HelloController`
+
 ```java
-// Implementación con lambda
-Route handler = (req, res) -> "Hello " + req.getValues("name");
+@RestController
+public class HelloController {
 
-// Ejecución
-String response = handler.handle(request, response);
-```
-
----
-
-## Arquitectura
-
-### Diagrama de Flujo
-
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Cliente (Browser/cURL)                   │
-└────────────────────────────┬────────────────────────────────┘
-                             │
-                    HTTP Request (GET)
-                             │
-                             ▼
-┌─────────────────────────────────────────────────────────────┐
-│                      HttpServer                             │
-│  - Escucha en puerto 8080                                  │
-│  - Acepta conexiones Socket                                │
-│  - Lee y parsea solicitudes HTTP                           │
-└────────────────────────────┬────────────────────────────────┘
-                             │
-                    Parsea ruta y parámetros
-                             │
-                             ▼
-                    ┌────────────────────┐
-                    │ ¿Ruta registrada?  │
-                    └────┬─────────────┬──┘
-                         │ YES        │ NO
-           ┌─────────────▼──┐    ┌────▼──────────────┐
-           │  WebFramework  │    │  Archivo estático │
-           │  Route Registry│    │  (webroot)        │
-           │ (Map<K,V>)     │    │                   │
-           └────────┬───────┘    └────┬──────────────┘
-                    │                  │
-        Ejecuta Lambda Handler    Lee archivo del disco
-                    │                  │
-                    └────┬──────────┬──┘
-                         │          │
-                         ▼          ▼
-                 ┌──────────────────────┐
-                 │  Construye Response  │
-                 │  HTTP (status, body) │
-                 └──────────┬───────────┘
-                            │
-                            ▼
-                  Envía respuesta al cliente
-                            │
-                            ▼
-                ┌─────────────────────────┐
-                │ Cliente recibe respuesta │
-                └─────────────────────────┘
-```
-
-### Modelo de Requests/Responses
-
-#### Request HTTP → Objeto Request
-
-```
-HTTP Request:
-GET /App/hello?name=Pedro&age=30 HTTP/1.1
-Host: localhost:8080
-
-                    ↓ (Parsed by HttpServer)
-
-Request Object:
-{
-  queryString: "name=Pedro&age=30",
-  queryParams: {
-    "name": "Pedro",
-    "age": "30"
-  }
-}
-```
-
-#### Objeto Response → HTTP Response
-
-```
-Handler Execution:
-String result = handler.handle(req, res);
-// result = "Hello Pedro"
-
-                    ↓ (Formatted by HttpServer)
-
-HTTP Response:
-HTTP/1.1 200 OK
-Content-Type: text/plain
-Content-Length: 11
-
-Hello Pedro
-```
-
-### Tipos MIME Soportados
-
-El servidor detecta automáticamente:
-
-| Extensión | MIME Type |
-|-----------|-----------|
-| `.html` | `text/html` |
-| `.css` | `text/css` |
-| `.js` | `text/javascript` |
-| `.jpg`, `.jpeg` | `image/jpeg` |
-| `.png` | `image/png` |
-| `.gif` | `image/gif` |
-| `.ico` | `image/x-icon` |
-| Otros | `application/octet-stream` |
-
----
-
-## Ejemplos de Uso
-
-### Ejemplo 1: Servicio Simple
-
-**App.java**:
-```java
-WebFramework.get("/greet", (req, res) -> 
-    "Hello " + req.getValues("name"));
-```
-
-**Solicitud**:
-```bash
-curl "http://localhost:8080/greet?name=Alice"
-```
-
-**Respuesta**:
-```
-Hello Alice
-```
-
----
-
-### Ejemplo 2: Múltiples Parámetros
-
-**App.java**:
-```java
-WebFramework.get("/calc", (req, res) -> {
-    int a = Integer.parseInt(req.getValues("a"));
-    int b = Integer.parseInt(req.getValues("b"));
-    return "Suma: " + (a + b);
-});
-```
-
-**Solicitud**:
-```bash
-curl "http://localhost:8080/calc?a=10&b=20"
-```
-
-**Respuesta**:
-```
-Suma: 30
-```
-
----
-
-### Ejemplo 3: Servicios Matemáticos
-
-**App.java**:
-```java
-WebFramework.get("/App/pi", (req, res) -> 
-    String.valueOf(Math.PI));
-
-WebFramework.get("/square", (req, res) -> {
-    int num = Integer.parseInt(req.getValues("n"));
-    return "Cuadrado: " + (num * num);
-});
-```
-
-**Solicitudes**:
-```bash
-# Pi
-curl "http://localhost:8080/App/pi"
-
-# Cuadrado
-curl "http://localhost:8080/square?n=5"
-```
-
----
-
-### Ejemplo 4: Archivos Estáticos
-
-**Estructura**:
-```
-src/main/resources/webroot/
-├── index.html
-├── style.css
-└── script.js
-```
-
-**Acceso**:
-```bash
-# Página principal
-curl http://localhost:8080/
-
-# CSS
-curl http://localhost:8080/style.css
-
-# JavaScript
-curl http://localhost:8080/script.js
-```
-
----
-
-### Ejemplo 5: Combinación Dinámica y Estática
-
-**App.java**:
-```java
-WebFramework.staticfiles("/webroot");
-
-WebFramework.get("/api/data", (req, res) -> {
-    String format = req.getValues("format");
-    if ("json".equals(format)) {
-        return "{\"message\": \"Hello JSON\"}";
+    @GetMapping("/hello")
+    public String index() {
+        return "Greetings from Mini-Spring!";
     }
-    return "Message: Hello Plain Text";
-});
+
+    @GetMapping("/pi")
+    public String pi() {
+        return "Pi value is: " + Math.PI;
+    }
+}
 ```
 
-**Solicitudes**:
-```bash
-# JSON
-curl "http://localhost:8080/api/data?format=json"
-
-# Plain Text
-curl "http://localhost:8080/api/data?format=text"
-
-# Archivo estático
-curl http://localhost:8080/index.html
-```
-
----
-
-## Limitaciones y Mejoras
-
-### Limitaciones Actuales
-
-| Limitación | Impacto | Solución Futura |
-|-----------|--------|-----------------|
-| Solo GET requests | No puede enviar datos POST | Implementar POST/PUT/DELETE |
-| Sin HTTP Headers | No se pueden leer cookies/auth | Parsear headers completos |
-| Response vacía | No hay control sobre respuesta | Completar clase Response |
-| Sin logging | Difícil debugging | Agregar System.out logs o logger |
-| Servidor síncrono | Una conexión a la vez | Implementar threading o NIO |
-| Sin control de status codes | Siempre 200 o 404 | Permitir establecer status codes |
-| Sin manejo de excepciones | Crashes no contemplados | Try-catch y error pages |
-| Sin CORS | No funciona con frontend externo | Agregar headers CORS |
-
-### Mejoras Recomendadas (Por Prioridad)
-
-1. **Soporte para POST/PUT/DELETE**
-   ```java
-   WebFramework.post("/api/users", handler);
-   WebFramework.put("/api/users/:id", handler);
-   WebFramework.delete("/api/users/:id", handler);
-   ```
-
-2. **Parseo de Headers HTTP**
-   ```java
-   // En clase Request
-   public String getHeader(String name);
-   public Map<String, String> getHeaders();
-   ```
-
-3. **Control de Response**
-   ```java
-   // En clase Response
-   public void setStatus(int status);
-   public void setHeader(String key, String value);
-   public void setBody(String body);
-   ```
-
-4. **Threading/Pool de Threads**
-   ```java
-   ExecutorService executor = Executors.newFixedThreadPool(10);
-   executor.execute(() -> handleClient(socket));
-   ```
-
-5. **Logging Estructurado**
-   ```java
-   logger.info("Request: {} {}", method, path);
-   logger.debug("Parameters: {}", params);
-   ```
-
-6. **Manejo de Excepciones**
-   ```java
-   try {
-       // ... handling
-   } catch (Exception e) {
-       sendErrorResponse(socket, 500, "Internal Server Error");
-   }
-   ```
-
-7. **Parámetros en Ruta**
-   ```java
-   WebFramework.get("/users/:id", handler);
-   // String id = req.getParam("id");
-   ```
-
-8. **JSON Response Helper**
-   ```java
-   public static String toJson(Object obj);
-   public static Object fromJson(String json, Class<?> type);
-   ```
-
----
-
-## Objetivo Educativo
-
-### ¿Qué Aprendes con Este Proyecto?
-
-Este framework enseña conceptos fundamentales:
-
-1. **Programación de Red**
-   - Sockets TCP/IP
-   - Servidor multi-cliente (básico)
-   - Protocolo HTTP
-
-2. **Servidores Web**
-   - Ciclo de solicitud/respuesta HTTP
-   - Parseo de URLs y query strings
-   - Content-Type y headers HTTP
-   - Códigos de estado (200, 404)
-
-3. **Patrones de Diseño**
-   - Registry pattern (rutas)
-   - Handler/Callback pattern
-   - Strategy pattern (lambdas)
-
-4. **Java Avanzado**
-   - Expresiones lambda
-   - Interfaces funcionales
-   - HashMap y colecciones
-   - I/O y NIO
-   - Excepciones checked vs unchecked
-
-5. **Comparación con Frameworks Reales**
-   - Spring Boot, Quarkus, etc.
-   - Entender qué hace cada librería
-   - Apreciar la complejidad detrás de abstracciones
-
-### Cómo Extender Este Proyecto
+### `GreetingController`
 
 ```java
-// Agrega métricas
-public class Metrics {
-    public static void recordRequest(String path, long duration) { }
-}
+@RestController
+public class GreetingController {
 
-// Agrega middleware
-public interface Middleware {
-    void process(Request req, Response res, Handler next);
-}
+    private static final String template = "Hello, %s!";
+    private final AtomicLong counter = new AtomicLong();
 
-// Agrega validación
-public class Validator {
-    public static void requireParam(Request req, String... params) { }
-}
-
-// Agrega templating
-public class Templates {
-    public static String render(String template, Map<String, Object> data) { }
+    @GetMapping("/greeting")
+    public String greeting(@RequestParam(value = "name", defaultValue = "World") String name) {
+        return String.format(template, name) + " (visita #" + counter.incrementAndGet() + ")";
+    }
 }
 ```
 
+El campo `counter` demuestra que la instancia del controlador es creada una sola vez durante el arranque del framework y reutilizada en cada solicitud, comportamiento analogo al scope singleton de Spring.
+
 ---
 
-## Referencia Rápida
+## Instrucciones de Ejecucion
 
-### Compilar y Ejecutar
+### Prerequisitos
+
+- Java Development Kit (JDK) 11 o superior
+- Apache Maven 3.6 o superior
+
+### Compilar
 
 ```bash
-# Compilar
 mvn clean compile
-
-# Ejecutar
-mvn exec:java -Dexec.mainClass="main.java.edu.escuelaing.framework.App"
-
-# O desde IDE: Click derecho en App.java → Run
 ```
 
-### URLs Comunes
+### Ejecutar con Maven
 
-```
-Página principal:      http://localhost:8080/
-Hello handler:         http://localhost:8080/App/hello?name=YOUR_NAME
-Pi constant:           http://localhost:8080/App/pi
-Archivo no existe:     http://localhost:8080/notfound.html (404)
+```bash
+mvn exec:java
 ```
 
-### Agregar Nueva Ruta
+### Ejecutar como JAR ejecutable
 
-```java
-// En App.java, antes de HttpServer.main()
-WebFramework.get("/your/path", (req, res) -> {
-    String param = req.getValues("paramName");
-    return "Your response with: " + param;
-});
+```bash
+mvn package
+java -jar target/mini-spring-1.0-SNAPSHOT.jar
 ```
 
-### Agregar Archivo Estático
+### Ejecutar desde classpath
+
+```bash
+java -cp target/classes edu.escuelaing.framework.App
+```
+
+### Salida esperada al iniciar
 
 ```
-1. Coloca el archivo en: src/main/resources/webroot/
-2. Accede en: http://localhost:8080/filename
+[MicroSpringBoot] Loading controller: edu.escuelaing.app.GreetingController
+[MicroSpringBoot] Registered GET /greeting -> GreetingController.greeting()
+[MicroSpringBoot] Loading controller: edu.escuelaing.app.HelloController
+[MicroSpringBoot] Registered GET /hello -> HelloController.index()
+[MicroSpringBoot] Registered GET /pi -> HelloController.pi()
+Servidor iniciado en puerto 8080...
 ```
 
 ---
 
-## Preguntas Frecuentes
+## Endpoints Disponibles
 
-### ¿Por qué puerto 8080?
+| Ruta | Descripcion | Ejemplo |
+|---|---|---|
+| `GET /` | Pagina HTML principal | `http://localhost:8080/` |
+| `GET /hello` | Saludo estatico | `http://localhost:8080/hello` |
+| `GET /pi` | Valor de la constante pi | `http://localhost:8080/pi` |
+| `GET /greeting` | Saludo personalizado con `@RequestParam` | `http://localhost:8080/greeting?name=Ana` |
 
-Es un puerto estándar para desarrollo web local. No requiere privilegios de administrador (los puertos < 1024 los requieren).
+Prueba con curl:
 
-### ¿How puedo cambiar el puerto?
-
-En [HttpServer.java](src/main/java/edu/escuelaing/framework/HttpServer.java), línea con `new ServerSocket(8080)`:
-```java
-ServerSocket serverSocket = new ServerSocket(3000);  // Tu puerto aquí
+```bash
+curl http://localhost:8080/hello
+curl http://localhost:8080/pi
+curl "http://localhost:8080/greeting?name=Daniel"
+curl "http://localhost:8080/greeting"
 ```
-
-### ¿Soporta HTTPS?
-
-No. Este es un servidor HTTP simple. HTTPS requeriría SSLServerSocket y certificados.
-
-### ¿Cuántos clientes simultáneos soporta?
-
-Uno a la vez (servidor sincrónico). Para múltiples: implementar `ExecutorService` o NIO.
-
-### ¿Puedo servir contenido dinámico (JSON, XML)?
-
-Sí, desde el handler:
-```java
-WebFramework.get("/api/user", (req, res) -> 
-    "{\"name\": \"" + req.getValues("name") + "\"}");
-```
-
-### ¿Por qué no usa Spring Boot o similar?
-
-Este proyecto es educativo. Spring Boot abstraería todos estos detalles. Entender el "cómo funciona" es valioso.
 
 ---
 
-## Contribuciones y Mejoras
+## Conceptos Aplicados
 
-Si deseas mejorar este proyecto:
+### Reflexion de Java
 
-1. Agrega nuevas características en ramas separadas
-2. Mantén el código simple y legible
-3. Documenta cambios importantes
-4. Considera agregar comentarios para nuevas secciones
+El nucleo del framework IoC usa las siguientes APIs:
+
+- `Class.forName(String)` — carga dinamica de clases por nombre.
+- `Class.isAnnotationPresent(Class)` — deteccion de anotaciones en tiempo de ejecucion.
+- `Class.getDeclaredConstructor().newInstance()` — instanciacion de POJOs sin acoplamiento.
+- `Class.getDeclaredMethods()` — inspeccion de los metodos de una clase.
+- `Method.getParameters()` — acceso a la lista de parametros de un metodo.
+- `Parameter.isAnnotationPresent(Class)` — deteccion de anotaciones en parametros.
+- `Method.invoke(Object, Object...)` — invocacion dinamica de metodos en tiempo de ejecucion.
+
+### Principios de Diseno
+
+- **Inversion of Control (IoC):** los controladores no se registran explicitamente; el framework los descubre y los gestiona.
+- **Convention over Configuration:** la presencia de `@RestController` es suficiente para que un POJO sea tratado como componente web.
+- **Separacion de responsabilidades:** el nucleo del framework (`framework/`) esta desacoplado de la aplicacion de ejemplo (`app/`).
+- **Interfaz funcional y lambdas:** `Route` es una interfaz funcional que permite que las rutas generadas por reflexion sean compatibles con las rutas definidas manualmente, sin herencia ni adaptadores.
+
+### Protocolo HTTP
+
+El servidor implementa manualmente el protocolo HTTP/1.1 a nivel de texto:
+
+- Linea de estado: `HTTP/1.1 200 OK`
+- Headers: `Content-Type`, `Content-Length`
+- Separacion de headers y cuerpo: `\r\n\r\n`
+- Deteccion de MIME types por extension de archivo
+- Respuestas 404 con cuerpo descriptivo
+
+---
+
+## Limitaciones Conocidas
+
+- El servidor atiende solicitudes de forma secuencial (no concurrente). Una solicitud debe completarse antes de aceptar la siguiente.
+- Solo se soporta el metodo HTTP GET.
+- Los tipos de retorno de los metodos mapeados deben ser `String`.
+- No hay manejo de cookies, sesiones ni autenticacion.
+- El escaneo del classpath no procesa archivos JAR de dependencias, solo directorios; esto es suficiente para el caso de uso educativo con `java -cp target/classes`.
 
 ---
 
 ## Licencia
 
-Este proyecto es de código abierto bajo licencia MIT. Siéntete libre de usarlo, modificarlo y distribuirlo.
-
-```
-MIT License
-
-Copyright (c) 2024 Escuela de Ingeniería
-
-Permission is hereby granted, free of charge...
-```
-
----
-
-## Recursos Adicionales
-
-### Para Aprender Más
-
-- **HTTP Protocol**: [RFC 7230](https://tools.ietf.org/html/rfc7230)
-- **Java Sockets**: [Oracle Docs: Java Networking](https://docs.oracle.com/javase/tutorial/networking/)
-- **Lambda Expressions**: [Oracle Docs: Lambda](https://docs.oracle.com/javase/tutorial/java/javaOO/lambdaexpressions.html)
-- **Spring Framework**: [spring.io](https://spring.io)
-
-### Proyectos Relacionados
-
-- **Jetty**: Un servidor Java ligero
-- **Undertow**: Motor de servidor de JBoss
-- **Vert.x**: Framework reactivo de JVM
-- **Express.js**: Framework Node.js (similar en concepto)
-
-### Herramientas Útiles
-
-```bash
-# Prueba solicitudes GET
-curl "http://localhost:8080/path"
-
-# Con parámetros
-curl "http://localhost:8080/path?param=value"
-
-# Ver headers
-curl -i "http://localhost:8080/path"
-
-# Usuario/contraseña
-curl -u user:pass "http://localhost:8080/path"
-
-# Postman: IDE gráfica para APIs (recomendado)
-```
-
----
-
-<div align="center">
-
-**Hecho con ❤️ para aprender cómo funcionan los frameworks web**
-
-¿Preguntas? Revisa el código fuente - ¡es educativo!
-
-</div>
-
-Supported file types:
-
-- .html
-- .css
-- .js
-- .png
-- .jpg
-- .gif
-
-Binary files (such as images) are handled correctly using OutputStream.
-
----
-
-### 4. HTTP Handling
-
-The server correctly implements:
-
-- HTTP/1.1 200 OK
-- 404 Not Found
-- Content-Type
-- Content-Length
-- Proper header-body separation using \r\n\r\n
-
----
-
-## Core Classes
-
-HttpServer  
-Responsible for:
-- Handling socket connections
-- Parsing HTTP requests
-- Matching routes
-- Serving static files
-- Writing HTTP responses
-
-WebFramework  
-Responsible for:
-- Registering routes
-- Managing the static folder location
-
-Route (Functional Interface)  
-Allows lambda-based route definitions.
-
-Request  
-Parses and stores query parameters.
-
-Response  
-Reserved for future response enhancements.
-
----
-
-## How to Run
-
-1. Clone the repository
-
-git clone https://github.com/your-username/your-repo.git  
-cd your-repo  
-
-2. Build with Maven
-
-mvn clean package  
-
-3. Run the application
-
-mvn exec:java -Dexec.mainClass="edu.escuelaing.framework.App"
-
-Or run App.java directly from your IDE.
-
----
-
-## Test Cases
-
-### REST Endpoints
-
-Test 1:
-
-http://localhost:8080/App/hello?name=Pedro
-
-Expected output:
-
-Hello Pedro
-
-Test 2:
-
-http://localhost:8080/App/pi
-
-Expected output:
-
-3.141592653589793
-
----
-
-### Static Files
-
-Test 3:
-
-http://localhost:8080/index.html
-
-Test 4:
-
-http://localhost:8080/style.css
-
-Test 5 (Image test):
-
-http://localhost:8080/images/logo.png
-
----
-
-### Test with curl
-
-curl "http://localhost:8080/App/hello?name=Daniel"
-
----
-
-## Technical Concepts Applied
-
-- HTTP protocol structure
-- TCP socket programming
-- Client-server architecture
-- Functional interfaces in Java
-- Lambda expressions
-- RESTful service design
-- Static resource handling
-- Content-Type management
-- Binary file streaming
-- Routing tables
-
----
-
-## Possible Improvements
-
-- Multi-threaded request handling
-- POST method support
-- JSON response handling
-- Middleware support
-- Automatic MIME type detection
-- Logging system
-- Exception handling layer
-
----
-
-## Learning Outcomes
-
-After completing this project, the developer gains practical understanding of:
-
-- How web frameworks work internally
-- How HTTP communication is structured
-- How routing systems operate
-- How distributed systems communicate over sockets
-- How static content is delivered in web architectures
-
----
-
-## Author
-
-Daniel  
-TDSE Student  
-
----
-
-## License
-
-Academic project developed for educational purposes.
+Proyecto academico desarrollado con fines educativos para la asignatura TDSE.
+Escuela de Ingenieria de Sistemas — Daniel Eduardo Useche, 2026.
