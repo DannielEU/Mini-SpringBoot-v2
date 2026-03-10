@@ -480,6 +480,23 @@ El servidor implementa manualmente el protocolo HTTP/1.1 a nivel de texto:
 - El escaneo del classpath no procesa archivos JAR de dependencias, solo directorios; esto es suficiente para el caso de uso educativo con `java -cp target/classes`.
 
 ---
+## Despliegue en AWS
+
+las siguientes imagenes evidencian claramente el despliegue en aws...
+
+1)
+![alt text](image.png)
+2) raiz al index.html 
+![alt text](image-1.png)
+3) Saludo
+![alt text](image-2.png)
+4)  PI
+![alt text](image-3.png)
+5)  Saludo con Nombre
+![alt text](image-4.png)
+
+así podemos comprobar el controller Greeting, Hello con las anotaciones.
+---
 
 ## Licencia
 
